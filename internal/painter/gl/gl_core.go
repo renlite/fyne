@@ -75,6 +75,7 @@ func (p *painter) Init() {
 	p.lineProgram = p.createProgram("line")
 	p.rectangleProgram = p.createProgram("rectangle")
 	p.roundRectangleProgram = p.createProgram("round_rectangle")
+	p.shapeProgram = p.createProgram("shape")
 }
 
 type coreContext struct{}

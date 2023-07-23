@@ -28,6 +28,8 @@ func shaderSourceNamed(name string) ([]byte, []byte) {
 		return shaderRectangleesVert.StaticContent, shaderRectangleesFrag.StaticContent
 	case "round_rectangle_es":
 		return shaderRectangleesVert.StaticContent, shaderRoundrectangleesFrag.StaticContent
+	case "shape":
+		return shaderGroupShapeVert.StaticContent, shaderGroupShapeFrag.StaticContent
 	}
 	return nil, nil
 }
@@ -70,8 +72,10 @@ type painter struct {
 	lineProgram           Program
 	rectangleProgram      Program
 	roundRectangleProgram Program
+	shapeProgram          Program
 	texScale              float32
 	pixScale              float32 // pre-calculate scale*texScale for each draw
+	points                []float32
 }
 
 // Declare conformity to Painter interface

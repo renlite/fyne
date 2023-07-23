@@ -78,13 +78,21 @@ func (p *painter) drawObject(o fyne.CanvasObject, pos fyne.Position, frame fyne.
 	case *canvas.Raster:
 		p.drawRaster(obj, pos, frame)
 	case *canvas.Rectangle:
-		p.drawRectangle(obj, pos, frame)
+		//p.drawRectangle(obj, pos, frame)
+		roundedCorners := obj.CornerRadius != 0
+		if roundedCorners {
+			p.renderShape(2.0, obj, pos, frame)
+		} else {
+			p.renderShape(1.0, obj, pos, frame)
+		}
 	case *canvas.Text:
 		p.drawText(obj, pos, frame)
 	case *canvas.LinearGradient:
 		p.drawGradient(obj, p.newGlLinearGradientTexture, pos, frame)
 	case *canvas.RadialGradient:
 		p.drawGradient(obj, p.newGlRadialGradientTexture, pos, frame)
+	case *canvas.Shape:
+		p.drawShapes(10.0, frame)
 	}
 }
 
@@ -161,6 +169,59 @@ func (p *painter) drawRectangle(rect *canvas.Rectangle, pos fyne.Position, frame
 	p.ctx.DrawArrays(triangleStrip, 0, 4)
 	p.logError()
 	p.freeBuffer(vbo)
+}
+
+func (p *painter) renderShape(shapeType float32, rect *canvas.Rectangle, pos fyne.Position, frame fyne.Size) {
+	if (rect.FillColor == color.Transparent || rect.FillColor == nil) && (rect.StrokeColor == color.Transparent || rect.StrokeColor == nil || rect.StrokeWidth == 0) {
+		return
+	}
+
+	if shapeType == 1.0 || shapeType == 2.0 {
+		println("ShapeType: 1.0 and 2.0")
+		rectPoints := p.groupRectCoords(pos, rect, frame)
+		p.points = append(p.points, rectPoints...)
+		println(p.points)
+		/*
+			NOT USED
+			for i := 0; i < 6; i++ {
+				points[i*18+2] = shapeType
+				points[i*18+3] = rect.StrokeWidth
+				points[i*18+4] = rect.CornerRadius
+				points[i*18+5] = 0.0 // NOT USED
+
+			}
+		*/
+
+	} else if shapeType == 3.0 {
+		println("ShapeType: 3.0")
+	}
+
+}
+
+func (p *painter) drawShapes(shapeType float32, frame fyne.Size) {
+	println("ShapeType: 10.0 (Draw shapes NOW!)")
+	//fmt.Println(p.points)
+	var program = p.shapeProgram
+	p.ctx.UseProgram(program)
+	vbo := p.createBuffer(p.points)
+	p.defineVertexArray(program, "att_vert", 2, 18, 0)
+	p.defineVertexArray(program, "att_type", 4, 18, 2)
+	p.defineVertexArray(program, "att_fill_color", 4, 18, 6)
+	p.defineVertexArray(program, "att_stroke_color", 4, 18, 10)
+	p.defineVertexArray(program, "att_rect_coords", 4, 18, 14)
+
+	p.ctx.BlendFunc(srcAlpha, oneMinusSrcAlpha)
+	p.logError()
+
+	frameSizeUniform := p.ctx.GetUniformLocation(program, "frame_size")
+	frameWidthScaled, frameHeightScaled := p.scaleFrameSize(frame)
+	p.ctx.Uniform2f(frameSizeUniform, frameWidthScaled, frameHeightScaled)
+	p.logError()
+
+	p.ctx.DrawArrays(triangles, 0, (len(p.points) / 18))
+	p.logError()
+	p.freeBuffer(vbo)
+	p.points = nil
 }
 
 func (p *painter) drawText(text *canvas.Text, pos fyne.Position, frame fyne.Size) {
@@ -365,6 +426,81 @@ func (p *painter) vecRectCoords(pos fyne.Position, rect *canvas.Rectangle, frame
 		0, 0, x2Norm, y2Norm}
 
 	return [4]float32{x1Pos, y1Pos, x2Pos, y2Pos}, coords
+}
+
+func (p *painter) groupRectCoords(pos fyne.Position, rect *canvas.Rectangle, frame fyne.Size) []float32 {
+	size := rect.Size()
+	pos1 := rect.Position()
+
+	xPosDiff := pos.X - pos1.X
+	yPosDiff := pos.Y - pos1.Y
+	pos1.X = roundToPixel(pos1.X+xPosDiff, p.pixScale)
+	pos1.Y = roundToPixel(pos1.Y+yPosDiff, p.pixScale)
+	size.Width = roundToPixel(size.Width, p.pixScale)
+	size.Height = roundToPixel(size.Height, p.pixScale)
+
+	x1Pos := pos1.X
+	x2Pos := (pos1.X + size.Width)
+	y1Pos := pos1.Y
+	y2Pos := (pos1.Y + size.Height)
+
+	// constants for the same rectangle
+	var shapeType float32
+	if rect.CornerRadius == 0.0 {
+		shapeType = 1.0
+	} else {
+		shapeType = 2.0
+	}
+	strokeWidthScaled := roundToPixel(rect.StrokeWidth*p.pixScale, 1.0)
+	radiusScaled := roundToPixel(rect.CornerRadius*p.pixScale, 1.0)
+	fillR, fillG, fillB, fillA := getFragmentColor(rect.FillColor)
+	strokeColor := rect.StrokeColor
+	if strokeColor == nil {
+		strokeColor = color.Transparent
+	}
+	strokeR, strokeG, strokeB, strokeA := getFragmentColor(strokeColor)
+	x1Scaled, x2Scaled, y1Scaled, y2Scaled := p.scaleRectCoords(x1Pos, x2Pos, y1Pos, y2Pos)
+
+	coords := []float32{
+		// #1
+		x1Pos, y1Pos, // att_vert
+		shapeType, strokeWidthScaled, radiusScaled, 0.0, // att_type
+		fillR, fillG, fillB, fillA, // att_fill_color;
+		strokeR, strokeG, strokeB, strokeA, //att_stroke_color;
+		x1Scaled, x2Scaled, y1Scaled, y2Scaled, // att_rect_coords;
+		// #2
+		x2Pos, y1Pos,
+		shapeType, strokeWidthScaled, radiusScaled, 0.0, // att_type
+		fillR, fillG, fillB, fillA, // att_fill_color;
+		strokeR, strokeG, strokeB, strokeA, //att_stroke_color;
+		x1Scaled, x2Scaled, y1Scaled, y2Scaled, // att_rect_coords;
+		// #3
+		x1Pos, y2Pos,
+		shapeType, strokeWidthScaled, radiusScaled, 0.0, // att_type
+		fillR, fillG, fillB, fillA, // att_fill_color;
+		strokeR, strokeG, strokeB, strokeA, //att_stroke_color;
+		x1Scaled, x2Scaled, y1Scaled, y2Scaled, // att_rect_coords;
+		// #4
+		x1Pos, y2Pos,
+		shapeType, strokeWidthScaled, radiusScaled, 0.0, // att_type
+		fillR, fillG, fillB, fillA, // att_fill_color;
+		strokeR, strokeG, strokeB, strokeA, //att_stroke_color;
+		x1Scaled, x2Scaled, y1Scaled, y2Scaled, // att_rect_coords;
+		// #5
+		x2Pos, y1Pos,
+		shapeType, strokeWidthScaled, radiusScaled, 0.0, // att_type
+		fillR, fillG, fillB, fillA, // att_fill_color;
+		strokeR, strokeG, strokeB, strokeA, //att_stroke_color;
+		x1Scaled, x2Scaled, y1Scaled, y2Scaled, // att_rect_coords;
+		// #6
+		x2Pos, y2Pos,
+		shapeType, strokeWidthScaled, radiusScaled, 0.0, // att_type
+		fillR, fillG, fillB, fillA, // att_fill_color;
+		strokeR, strokeG, strokeB, strokeA, //att_stroke_color;
+		x1Scaled, x2Scaled, y1Scaled, y2Scaled, // att_rect_coords;
+	}
+
+	return coords
 }
 
 func roundToPixel(v float32, pixScale float32) float32 {
