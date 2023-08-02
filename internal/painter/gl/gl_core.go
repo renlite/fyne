@@ -31,6 +31,9 @@ const (
 	srcAlpha              = gl.SRC_ALPHA
 	staticDraw            = gl.STATIC_DRAW
 	texture0              = gl.TEXTURE0
+	texture1              = gl.TEXTURE1
+	texture2              = gl.TEXTURE2
+	texture3              = gl.TEXTURE3
 	texture2D             = gl.TEXTURE_2D
 	textureMinFilter      = gl.TEXTURE_MIN_FILTER
 	textureMagFilter      = gl.TEXTURE_MAG_FILTER
@@ -75,7 +78,7 @@ func (p *painter) Init() {
 	p.lineProgram = p.createProgram("line")
 	p.rectangleProgram = p.createProgram("rectangle")
 	p.roundRectangleProgram = p.createProgram("round_rectangle")
-	p.shapeProgram = p.createProgram("shape")
+	p.shapeProgram = p.createProgram("group_shape")
 }
 
 type coreContext struct{}
@@ -245,6 +248,10 @@ func (c *coreContext) TexImage2D(target uint32, level, width, height int, colorF
 
 func (c *coreContext) TexParameteri(target, param uint32, value int32) {
 	gl.TexParameteri(target, param, value)
+}
+
+func (c *coreContext) Uniform1i(uniform Uniform, v int32) {
+	gl.Uniform1i(int32(uniform), v)
 }
 
 func (c *coreContext) Uniform1f(uniform Uniform, v float32) {

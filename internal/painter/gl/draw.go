@@ -78,15 +78,11 @@ func (p *painter) drawObject(o fyne.CanvasObject, pos fyne.Position, frame fyne.
 	case *canvas.Raster:
 		p.drawRaster(obj, pos, frame)
 	case *canvas.Rectangle:
-		//p.drawRectangle(obj, pos, frame)
-		roundedCorners := obj.CornerRadius != 0
-		if roundedCorners {
-			p.renderShape(2.0, obj, pos, frame)
-		} else {
-			p.renderShape(1.0, obj, pos, frame)
-		}
+		//*** p.drawRectangle(obj, pos, frame)
+		p.renderCanvasObject(o, pos, frame)
 	case *canvas.Text:
-		p.drawText(obj, pos, frame)
+		//***p.drawText(obj, pos, frame)
+		p.renderCanvasObject(o, pos, frame)
 	case *canvas.LinearGradient:
 		p.drawGradient(obj, p.newGlLinearGradientTexture, pos, frame)
 	case *canvas.RadialGradient:
@@ -171,14 +167,22 @@ func (p *painter) drawRectangle(rect *canvas.Rectangle, pos fyne.Position, frame
 	p.freeBuffer(vbo)
 }
 
-func (p *painter) renderShape(shapeType float32, rect *canvas.Rectangle, pos fyne.Position, frame fyne.Size) {
-	if (rect.FillColor == color.Transparent || rect.FillColor == nil) && (rect.StrokeColor == color.Transparent || rect.StrokeColor == nil || rect.StrokeWidth == 0) {
-		return
-	}
-
-	if shapeType == 1.0 || shapeType == 2.0 {
-		println("ShapeType: 1.0 and 2.0")
-		rectPoints := p.groupRectCoords(pos, rect, frame)
+func (p *painter) renderCanvasObject(o fyne.CanvasObject, pos fyne.Position, frame fyne.Size) {
+	var shapeType float32
+	switch obj := o.(type) {
+	case *canvas.Rectangle:
+		rect := obj // Re-Assignment for better readability
+		roundedCorners := rect.CornerRadius != 0
+		if roundedCorners {
+			shapeType = 2.0
+		} else {
+			shapeType = 1.0
+		}
+		println("ShapeType: ", shapeType)
+		if (rect.FillColor == color.Transparent || rect.FillColor == nil) && (rect.StrokeColor == color.Transparent || rect.StrokeColor == nil || rect.StrokeWidth == 0) {
+			return
+		}
+		rectPoints := p.groupVecRectCoords(pos, rect, frame)
 		p.points = append(p.points, rectPoints...)
 		println(p.points)
 		/*
@@ -192,10 +196,35 @@ func (p *painter) renderShape(shapeType float32, rect *canvas.Rectangle, pos fyn
 			}
 		*/
 
-	} else if shapeType == 3.0 {
-		println("ShapeType: 3.0")
-	}
+	case *canvas.Text:
+		text := obj // Re-Assignment for better readability
+		shapeType = 3.0
+		println("ShapeType: ", shapeType)
+		if text.Text == "" || text.Text == " " {
+			return
+		}
 
+		size := text.MinSize()
+		containerSize := text.Size()
+		switch text.Alignment {
+		case fyne.TextAlignTrailing:
+			pos = fyne.NewPos(pos.X+containerSize.Width-size.Width, pos.Y)
+		case fyne.TextAlignCenter:
+			pos = fyne.NewPos(pos.X+(containerSize.Width-size.Width)/2, pos.Y)
+		}
+
+		if containerSize.Height > size.Height {
+			pos = fyne.NewPos(pos.X, pos.Y+(containerSize.Height-size.Height)/2)
+		}
+
+		// text size is sensitive to position on screen
+		size, _ = roundToPixelCoords(size, text.Position(), p.pixScale)
+		size.Width += roundToPixel(paint.VectorPad(text), p.pixScale)
+		texturePoints := p.renderTextureWithDetails(shapeType, text, p.newGlTextTexture, pos, size, frame, canvas.ImageFillStretch, 1.0, 0)
+		p.points = append(p.points, texturePoints...)
+
+		//p.textureIdx += 1
+	}
 }
 
 func (p *painter) drawShapes(shapeType float32, frame fyne.Size) {
@@ -218,10 +247,41 @@ func (p *painter) drawShapes(shapeType float32, frame fyne.Size) {
 	p.ctx.Uniform2f(frameSizeUniform, frameWidthScaled, frameHeightScaled)
 	p.logError()
 
+	// Submit Textures if to draw
+	sampler0 := p.ctx.GetUniformLocation(program, "texture0")
+	p.ctx.Uniform1i(sampler0, 0)
+	sampler1 := p.ctx.GetUniformLocation(program, "texture1")
+	p.ctx.Uniform1i(sampler1, 1)
+	sampler2 := p.ctx.GetUniformLocation(program, "texture2")
+	p.ctx.Uniform1i(sampler2, 2)
+	sampler3 := p.ctx.GetUniformLocation(program, "texture3")
+	p.ctx.Uniform1i(sampler3, 3)
+	p.logError()
+	println(len(p.textures))
+	for idx, texture := range p.textures {
+		println(idx)
+		switch idx {
+		case 0:
+			p.ctx.ActiveTexture(texture0)
+		case 1:
+			p.ctx.ActiveTexture(texture1)
+		case 2:
+			p.ctx.ActiveTexture(texture2)
+		case 3:
+			p.ctx.ActiveTexture(texture3)
+		}
+		//p.ctx.ActiveTexture(texture0 + uint32(idx))
+		p.ctx.BindTexture(texture2D, texture)
+		p.logError()
+	}
+
+	println(len(p.points) / 18)
+	println(p.points)
 	p.ctx.DrawArrays(triangles, 0, (len(p.points) / 18))
 	p.logError()
 	p.freeBuffer(vbo)
 	p.points = nil
+	p.textures = nil
 }
 
 func (p *painter) drawText(text *canvas.Text, pos fyne.Position, frame fyne.Size) {
@@ -286,6 +346,34 @@ func (p *painter) drawTextureWithDetails(o fyne.CanvasObject, creator func(canva
 	p.ctx.DrawArrays(triangleStrip, 0, 4)
 	p.logError()
 	p.freeBuffer(vbo)
+}
+
+func (p *painter) renderTextureWithDetails(
+	shapeType float32,
+	o fyne.CanvasObject,
+	creator func(canvasObject fyne.CanvasObject) Texture,
+	pos fyne.Position,
+	size, frame fyne.Size,
+	fill canvas.ImageFill,
+	alpha float32,
+	pad float32,
+) []float32 {
+
+	texture, err := p.getTexture(o, creator)
+	if err != nil {
+		return nil
+	}
+	p.textures = append(p.textures, texture)
+
+	aspect := float32(0)
+	if img, ok := o.(*canvas.Image); ok {
+		aspect = img.Aspect()
+		if aspect == 0 {
+			aspect = 1 // fallback, should not occur - normally an image load error
+		}
+	}
+	return p.groupRectCoords(shapeType, size, pos, frame, fill, aspect, pad)
+
 }
 
 func (p *painter) freeBuffer(vbo Buffer) {
@@ -376,6 +464,82 @@ func (p *painter) rectCoords(size fyne.Size, pos fyne.Position, frame fyne.Size,
 	}
 }
 
+func (p *painter) groupRectCoords(shapeType float32, size fyne.Size, pos fyne.Position, frame fyne.Size,
+	fill canvas.ImageFill, aspect float32, pad float32) []float32 {
+	size, pos = rectInnerCoords(size, pos, fill, aspect)
+	size, pos = roundToPixelCoords(size, pos, p.pixScale)
+
+	x1Pos := pos.X - pad
+	x2Pos := pos.X + size.Width + pad
+	y1Pos := pos.Y - pad
+	y2Pos := pos.Y + size.Height + pad
+
+	println("in groupRectCoord")
+	return []float32{
+		/* TEMPLATE OLD for triangleStrip
+		// coord x, y, z texture x, y
+		x1, y2, 0, 0.0, 1.0, // top left
+		x1, y1, 0, 0.0, 0.0, // bottom left
+		x2, y2, 0, 1.0, 1.0, // top right
+		x2, y1, 0, 1.0, 0.0, // bottom right
+		*/
+
+		// #1
+		x1Pos, y2Pos, // att_vert
+		// (shape = 3.0      | texture x    | texture y | texIdx )
+		shapeType, 0.0, 1.0, float32(len(p.textures) - 1), // att_type
+		// NOT USED
+		0.0, 0.0, 0.0, 0.0, // att_fill_color;
+		0.0, 0.0, 0.0, 0.0, //att_stroke_color;
+		0.0, 0.0, 0.0, 0.0, // att_rect_coords;
+
+		// #2
+		x1Pos, y1Pos, // att_vert
+		// (shape = 3.0      | texture x    | texture y | texIdx )
+		shapeType, 0.0, 0.0, float32(len(p.textures) - 1), // att_type
+		// NOT USED
+		0.0, 0.0, 0.0, 0.0, // att_fill_color;
+		0.0, 0.0, 0.0, 0.0, //att_stroke_color;
+		0.0, 0.0, 0.0, 0.0, // att_rect_coords;
+
+		// #3
+		x2Pos, y2Pos, // att_vert
+		// (shape = 3.0      | texture x    | texture y | texIdx )
+		shapeType, 1.0, 1.0, float32(len(p.textures) - 1), // att_type
+		// NOT USED
+		0.0, 0.0, 0.0, 0.0, // att_fill_color;
+		0.0, 0.0, 0.0, 0.0, //att_stroke_color;
+		0.0, 0.0, 0.0, 0.0, // att_rect_coords;
+
+		// #4
+		x2Pos, y1Pos, // att_vert
+		// (shape = 3.0      | texture x    | texture y | texIdx )
+		shapeType, 1.0, 0.0, float32(len(p.textures) - 1), // att_type
+		// NOT USED
+		0.0, 0.0, 0.0, 0.0, // att_fill_color;
+		0.0, 0.0, 0.0, 0.0, //att_stroke_color;
+		0.0, 0.0, 0.0, 0.0, // att_rect_coords;
+
+		// #5
+		x1Pos, y1Pos, // att_vert
+		// (shape = 3.0      | texture x    | texture y | texIdx )
+		shapeType, 0.0, 0.0, float32(len(p.textures) - 1), // att_type
+		// NOT USED
+		0.0, 0.0, 0.0, 0.0, // att_fill_color;
+		0.0, 0.0, 0.0, 0.0, //att_stroke_color;
+		0.0, 0.0, 0.0, 0.0, // att_rect_coords;
+
+		// #6
+		x2Pos, y2Pos, // att_vert
+		// (shape = 3.0      | texture x    | texture y | texIdx )
+		shapeType, 1.0, 1.0, float32(len(p.textures) - 1), // att_type
+		// NOT USED
+		0.0, 0.0, 0.0, 0.0, // att_fill_color;
+		0.0, 0.0, 0.0, 0.0, //att_stroke_color;
+		0.0, 0.0, 0.0, 0.0, // att_rect_coords;
+	}
+}
+
 func rectInnerCoords(size fyne.Size, pos fyne.Position, fill canvas.ImageFill, aspect float32) (fyne.Size, fyne.Position) {
 	if fill == canvas.ImageFillContain || fill == canvas.ImageFillOriginal {
 		// change pos and size accordingly
@@ -428,7 +592,7 @@ func (p *painter) vecRectCoords(pos fyne.Position, rect *canvas.Rectangle, frame
 	return [4]float32{x1Pos, y1Pos, x2Pos, y2Pos}, coords
 }
 
-func (p *painter) groupRectCoords(pos fyne.Position, rect *canvas.Rectangle, frame fyne.Size) []float32 {
+func (p *painter) groupVecRectCoords(pos fyne.Position, rect *canvas.Rectangle, frame fyne.Size) []float32 {
 	size := rect.Size()
 	pos1 := rect.Position()
 

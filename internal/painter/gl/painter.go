@@ -28,7 +28,7 @@ func shaderSourceNamed(name string) ([]byte, []byte) {
 		return shaderRectangleesVert.StaticContent, shaderRectangleesFrag.StaticContent
 	case "round_rectangle_es":
 		return shaderRectangleesVert.StaticContent, shaderRoundrectangleesFrag.StaticContent
-	case "shape":
+	case "group_shape":
 		return shaderGroupShapeVert.StaticContent, shaderGroupShapeFrag.StaticContent
 	}
 	return nil, nil
@@ -61,6 +61,7 @@ type Painter interface {
 func NewPainter(c fyne.Canvas, ctx driver.WithContext) Painter {
 	p := &painter{canvas: c, contextProvider: ctx}
 	p.SetFrameBufferScale(1.0)
+	p.textures = nil
 	return p
 }
 
@@ -76,6 +77,7 @@ type painter struct {
 	texScale              float32
 	pixScale              float32 // pre-calculate scale*texScale for each draw
 	points                []float32
+	textures              []Texture
 }
 
 // Declare conformity to Painter interface

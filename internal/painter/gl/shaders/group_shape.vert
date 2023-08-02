@@ -3,19 +3,22 @@
 /* scaled */
 uniform vec2 frame_size; //window_size
 
-/* triangle 6 points (x/y) for rect */
+/* triangle 6 points (x | y) for rect */
 attribute vec2 att_vert;
 
 /* 
 scaled size, coords 
 Description of the new shape.
 */
-attribute vec4 att_type; // (shape = 1.0, 2.0, 3.0, ... | stroke_width | radius | NOT_USED )
+// (shape = 1.0, 2.0 | stroke_width | radius    | NOT_USED )
+// (shape = 3.0      | texture x    | texture y | texIdx )
+attribute vec4 att_type; 
+
 /*
 Shapes:
 1.0 = rectangle
 2.0 = round_rectangle
-3.0 = text
+3.0 = text texture
 */
 
 attribute vec4 att_fill_color; // (fillColor RGBA)
@@ -32,6 +35,10 @@ varying vec4  stroke_color;
 
 varying vec4  rect_coords;
 varying vec2  rect_size_half;
+
+// for Texture
+varying vec2 fragTexCoord;
+varying float texIdx;
 
 /*
 vec4 unpack_to_frag_color(float rgb_as_float, float a){
@@ -58,17 +65,25 @@ void main() {
     gl_Position = vec4(-1.0 + att_vert.x*2.0/frame_size.x, 1.0 - att_vert.y*2.0/frame_size.y, 0, 1);
 
     type = att_type[0];
-    stroke_width = att_type[1];
-    stroke_width_half = stroke_width * 0.5;
-    radius = att_type[2];
-    fill_color = att_fill_color;
-    if (stroke_width != 0.0){       
-        stroke_color = att_stroke_color;
+
+    if (type == 1.0 || type == 2.0){
+        stroke_width = att_type[1];
+        stroke_width_half = stroke_width * 0.5;
+        radius = att_type[2];
+        fill_color = att_fill_color;
+        if (stroke_width != 0.0){       
+            stroke_color = att_stroke_color;
+        }
+        rect_coords = att_rect_coords;
+        if (type == 2.0){
+            rect_size_half = get_rect_size_half(rect_coords, stroke_width);
+        }
+    } else if (type == 3.0){
+        fragTexCoord.x = att_type[1];
+        fragTexCoord.y = att_type[2];
+        texIdx = att_type[3];
     }
-    rect_coords = att_rect_coords;
-    if (type == 2.0){
-        rect_size_half = get_rect_size_half(rect_coords, stroke_width);
-    }
+
 }
 
 

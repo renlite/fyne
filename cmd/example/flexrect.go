@@ -48,6 +48,7 @@ import (
 	"fyne.io/fyne/v2/app"
 	. "fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/widget"
 )
 
 func main() {
@@ -94,31 +95,45 @@ func main() {
 	rr7 := Rectangle{FillColor: yellow, CornerRadius: 10.0}
 	rr7.Resize(fyne.NewSize(290, 140))
 	rr7.Move(fyne.NewPos(365, 365))
+
+	txtSeg1 := &widget.TextSegment{Text: "TEST"}
+	txt1 := widget.NewRichText(txtSeg1)
+	txt1.Move(fyne.NewPos(10, 10))
 	// >>END: composition
 
 	// RRect8
 	rr8 := Rectangle{FillColor: yellow, StrokeColor: green_blue, StrokeWidth: 5.0}
 	rr8.Resize((fyne.NewSize(200, 100)))
 	rr8.Move(fyne.NewPos(255, 460))
+
+	txtSeg2 := &widget.TextSegment{Text: "one GL stream to GPU"}
+	txt2 := widget.NewRichText(txtSeg2)
+	txt2.Move(fyne.NewPos(60, 60))
+
 	// RRect9
 	rr9 := Rectangle{FillColor: yellow, StrokeColor: orange, StrokeWidth: 5.0, CornerRadius: 8.0}
 	rr9.Resize((fyne.NewSize(300, 150)))
 	rr9.Move(fyne.NewPos(50, 360))
+
+	btn1 := widget.NewButton("Button", nil)
+	btn1.Resize(fyne.NewSize(80.0, 40.0))
+	btn1.Move(fyne.NewPos(110, 110))
+
+	egText := NewText("egText", color.White)
+	//egText.Resize((fyne.NewSize(200, 50)))
+	egText.Move(fyne.NewPos(160, 160))
 
 	shape := Shape{}
 
 	cont := container.NewWithoutLayout(
 		&rr1,
 		&rr2,
+		txt1,
+		txt2,
 		&rr3,
-		&rr4,
-		&rr5,
-		// >> composition
-		&rr6,
+		btn1,
+		egText,
 		&rr7,
-		// >>
-		&rr9,
-		&rr8,
 		&shape,
 	)
 	myWindow.SetContent(cont)

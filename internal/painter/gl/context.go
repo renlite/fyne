@@ -35,6 +35,7 @@ type context interface {
 	ShaderSource(shader Shader, source string)
 	TexImage2D(target uint32, level, width, height int, colorFormat, typ uint32, data []uint8)
 	TexParameteri(target, param uint32, value int32)
+	Uniform1i(uniform Uniform, v int32)
 	Uniform1f(uniform Uniform, v float32)
 	Uniform2f(uniform Uniform, v0, v1 float32)
 	Uniform4f(uniform Uniform, v0, v1, v2, v3 float32)
