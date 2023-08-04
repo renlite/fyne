@@ -248,29 +248,37 @@ func (p *painter) drawShapes(shapeType float32, frame fyne.Size) {
 	p.logError()
 
 	// Submit Textures if to draw
-	sampler0 := p.ctx.GetUniformLocation(program, "texture0")
-	p.ctx.Uniform1i(sampler0, 0)
-	sampler1 := p.ctx.GetUniformLocation(program, "texture1")
-	p.ctx.Uniform1i(sampler1, 1)
-	sampler2 := p.ctx.GetUniformLocation(program, "texture2")
-	p.ctx.Uniform1i(sampler2, 2)
-	sampler3 := p.ctx.GetUniformLocation(program, "texture3")
-	p.ctx.Uniform1i(sampler3, 3)
+	/*
+		sampler0 := p.ctx.GetUniformLocation(program, "texture0")
+		p.ctx.Uniform1i(sampler0, 0)
+		sampler1 := p.ctx.GetUniformLocation(program, "texture1")
+		p.ctx.Uniform1i(sampler1, 1)
+		sampler2 := p.ctx.GetUniformLocation(program, "texture2")
+		p.ctx.Uniform1i(sampler2, 2)
+		sampler3 := p.ctx.GetUniformLocation(program, "texture3")
+		p.ctx.Uniform1i(sampler3, 3)
+	*/
 	p.logError()
 	println(len(p.textures))
+	samplers := p.ctx.GetUniformLocation(program, "textures")
+	var floatVal float32
 	for idx, texture := range p.textures {
 		println(idx)
-		switch idx {
-		case 0:
-			p.ctx.ActiveTexture(texture0)
-		case 1:
-			p.ctx.ActiveTexture(texture1)
-		case 2:
-			p.ctx.ActiveTexture(texture2)
-		case 3:
-			p.ctx.ActiveTexture(texture3)
-		}
-		//p.ctx.ActiveTexture(texture0 + uint32(idx))
+		/*
+			switch idx {
+			case 0:
+				p.ctx.ActiveTexture(texture0)
+			case 1:
+				p.ctx.ActiveTexture(texture1)
+			case 2:
+				p.ctx.ActiveTexture(texture2)
+			case 3:
+				p.ctx.ActiveTexture(texture3)
+			}
+		*/
+		floatVal = float32(idx)
+		p.ctx.Uniform1fv(samplers, int32(idx), &floatVal)
+		p.ctx.ActiveTexture(texture0 + uint32(idx))
 		p.ctx.BindTexture(texture2D, texture)
 		p.logError()
 	}

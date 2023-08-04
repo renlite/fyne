@@ -250,6 +250,10 @@ func (c *coreContext) TexParameteri(target, param uint32, value int32) {
 	gl.TexParameteri(target, param, value)
 }
 
+func (c *coreContext) Uniform1fv(uniform Uniform, count int32, v *float32) {
+	gl.Uniform1fv(int32(uniform), count, v)
+}
+
 func (c *coreContext) Uniform1i(uniform Uniform, v int32) {
 	gl.Uniform1i(int32(uniform), v)
 }
