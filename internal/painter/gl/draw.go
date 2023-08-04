@@ -260,8 +260,7 @@ func (p *painter) drawShapes(shapeType float32, frame fyne.Size) {
 	*/
 	p.logError()
 	println(len(p.textures))
-	samplers := p.ctx.GetUniformLocation(program, "textures")
-	var floatVal float32
+	var values []int32
 	for idx, texture := range p.textures {
 		println(idx)
 		/*
@@ -276,12 +275,13 @@ func (p *painter) drawShapes(shapeType float32, frame fyne.Size) {
 				p.ctx.ActiveTexture(texture3)
 			}
 		*/
-		floatVal = float32(idx)
-		p.ctx.Uniform1fv(samplers, int32(idx), &floatVal)
+		values = append(values, int32(idx))
 		p.ctx.ActiveTexture(texture0 + uint32(idx))
 		p.ctx.BindTexture(texture2D, texture)
 		p.logError()
 	}
+	samplers := p.ctx.GetUniformLocation(program, "textures")
+	p.ctx.Uniform1iv(samplers, int32(len(p.textures)), &values[0])
 
 	println(len(p.points) / 18)
 	println(p.points)
