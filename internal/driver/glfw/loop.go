@@ -8,6 +8,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/internal/app"
 	"fyne.io/fyne/v2/internal/cache"
+	"fyne.io/fyne/v2/internal/driver/common"
 	"fyne.io/fyne/v2/internal/painter"
 	"fyne.io/fyne/v2/internal/scale"
 )
@@ -24,47 +25,34 @@ type drawData struct {
 }
 
 type runFlag struct {
-	sync.Mutex
+	sync.Cond
 	flag bool
-	cond *sync.Cond
 }
 
 // channel for queuing functions on the main thread
 var funcQueue = make(chan funcData)
 var drawFuncQueue = make(chan drawData)
-var run *runFlag
-var initOnce = &sync.Once{}
-var donePool = &sync.Pool{New: func() interface{} {
-	return make(chan struct{})
-}}
-
-func newRun() *runFlag {
-	r := runFlag{}
-	r.cond = sync.NewCond(&r)
-	return &r
-}
+var run = &runFlag{Cond: sync.Cond{L: &sync.Mutex{}}}
 
 // Arrange that main.main runs on main thread.
 func init() {
 	runtime.LockOSThread()
 	mainGoroutineID = goroutineID()
-
-	run = newRun()
 }
 
 // force a function f to run on the main thread
 func runOnMain(f func()) {
 	// If we are on main just execute - otherwise add it to the main queue and wait.
 	// The "running" variable is normally false when we are on the main thread.
-	run.Lock()
-	if !run.flag {
-		f()
-		run.Unlock()
-	} else {
-		run.Unlock()
+	run.L.Lock()
+	running := !run.flag
+	run.L.Unlock()
 
-		done := donePool.Get().(chan struct{})
-		defer donePool.Put(done)
+	if running {
+		f()
+	} else {
+		done := common.DonePool.Get().(chan struct{})
+		defer common.DonePool.Put(done)
 
 		funcQueue <- funcData{f: f, done: done}
 
@@ -78,8 +66,8 @@ func runOnDraw(w *window, f func()) {
 		runOnMain(func() { w.RunWithContext(f) })
 		return
 	}
-	done := donePool.Get().(chan struct{})
-	defer donePool.Put(done)
+	done := common.DonePool.Get().(chan struct{})
+	defer common.DonePool.Put(done)
 
 	drawFuncQueue <- drawData{f: f, win: w, done: done}
 	<-done
@@ -111,12 +99,12 @@ func (d *gLDriver) drawSingleFrame() {
 
 func (d *gLDriver) runGL() {
 	eventTick := time.NewTicker(time.Second / 60)
-	run.Lock()
-	run.flag = true
-	run.Unlock()
-	run.cond.Broadcast()
 
-	d.initGLFW()
+	run.L.Lock()
+	run.flag = true
+	run.L.Unlock()
+	run.Broadcast()
+
 	if d.trayStart != nil {
 		d.trayStart()
 	}
@@ -196,7 +184,7 @@ func (d *gLDriver) runGL() {
 func (d *gLDriver) repaintWindow(w *window) {
 	canvas := w.canvas
 	w.RunWithContext(func() {
-		if w.canvas.EnsureMinSize() {
+		if canvas.EnsureMinSize() {
 			w.viewLock.Lock()
 			w.shouldExpand = true
 			w.viewLock.Unlock()

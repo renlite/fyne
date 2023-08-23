@@ -3,6 +3,7 @@ package widget
 import (
 	"image/color"
 	"math"
+	"runtime"
 	"strings"
 	"time"
 	"unicode"
@@ -49,6 +50,11 @@ type Entry struct {
 	Password    bool
 	MultiLine   bool
 	Wrapping    fyne.TextWrap
+
+	// Scroll can be used to turn off the scrolling of our entry when Wrapping is WrapNone.
+	//
+	// Since: 2.4
+	Scroll widget.ScrollDirection
 
 	// Set a validator that this entry will check against
 	// Since: 1.4
@@ -172,7 +178,7 @@ func (e *Entry) CreateRenderer() fyne.WidgetRenderer {
 	e.content = &entryContent{entry: e}
 	e.scroll = widget.NewScroll(nil)
 	objects := []fyne.CanvasObject{box, border}
-	if e.Wrapping != fyne.TextWrapOff {
+	if e.Wrapping != fyne.TextWrapOff || e.Scroll != widget.ScrollNone {
 		e.scroll.Content = e.content
 		objects = append(objects, e.scroll)
 	} else {
@@ -474,6 +480,26 @@ func (e *Entry) SetText(text string) {
 	e.updateCursorAndSelection()
 }
 
+// Appends the text to the end of the entry
+//
+// Since: 2.4
+func (e *Entry) Append(text string) {
+	e.propertyLock.Lock()
+	provider := e.textProvider()
+	provider.insertAt(provider.len(), text)
+	content := provider.String()
+	changed := e.updateText(content)
+	e.propertyLock.Unlock()
+
+	if changed {
+		e.Validate()
+		if e.OnChanged != nil {
+			e.OnChanged(content)
+		}
+	}
+	e.Refresh()
+}
+
 // Tapped is called when this entry has been tapped. We update the cursor position in
 // device-specific callbacks (MouseDown() and TouchDown()).
 //
@@ -613,17 +639,9 @@ func (e *Entry) TypedKey(key *fyne.KeyEvent) {
 	case fyne.KeyRight:
 		e.typedKeyRight(provider)
 	case fyne.KeyEnd:
-		e.propertyLock.Lock()
-		if e.MultiLine {
-			e.CursorColumn = provider.rowLength(e.CursorRow)
-		} else {
-			e.CursorColumn = provider.len()
-		}
-		e.propertyLock.Unlock()
+		e.typedKeyEnd(provider)
 	case fyne.KeyHome:
-		e.propertyLock.Lock()
-		e.CursorColumn = 0
-		e.propertyLock.Unlock()
+		e.typedKeyHome()
 	case fyne.KeyPageUp:
 		e.propertyLock.Lock()
 		if e.MultiLine {
@@ -645,11 +663,18 @@ func (e *Entry) TypedKey(key *fyne.KeyEvent) {
 	}
 
 	e.propertyLock.Lock()
-	e.updateText(provider.String())
+	content := provider.String()
+	changed := e.updateText(content)
 	if e.CursorRow == e.selectRow && e.CursorColumn == e.selectColumn {
 		e.selecting = false
 	}
 	e.propertyLock.Unlock()
+	if changed {
+		e.Validate()
+		if e.OnChanged != nil {
+			e.OnChanged(content)
+		}
+	}
 	e.Refresh()
 }
 
@@ -709,6 +734,22 @@ func (e *Entry) typedKeyRight(provider *RichText) {
 		}
 	} else if e.CursorColumn < provider.len() {
 		e.CursorColumn++
+	}
+	e.propertyLock.Unlock()
+}
+
+func (e *Entry) typedKeyHome() {
+	e.propertyLock.Lock()
+	e.CursorColumn = 0
+	e.propertyLock.Unlock()
+}
+
+func (e *Entry) typedKeyEnd(provider *RichText) {
+	e.propertyLock.Lock()
+	if e.MultiLine {
+		e.CursorColumn = provider.rowLength(e.CursorRow)
+	} else {
+		e.CursorColumn = provider.len()
 	}
 	e.propertyLock.Unlock()
 }
@@ -804,6 +845,12 @@ func (e *Entry) cutToClipboard(clipboard fyne.Clipboard) {
 
 	e.copyToClipboard(clipboard)
 	e.setFieldsAndRefresh(e.eraseSelection)
+	e.propertyLock.Lock()
+	if e.OnChanged != nil {
+		e.OnChanged(e.Text)
+	}
+	e.propertyLock.Unlock()
+	e.Validate()
 }
 
 // eraseSelection removes the current selected region and moves the cursor
@@ -873,6 +920,7 @@ func (e *Entry) placeholderProvider() *RichText {
 
 	style := RichTextStyleInline
 	style.ColorName = theme.ColorNamePlaceHolder
+	style.TextStyle = e.TextStyle
 	text := NewRichText(&TextSegment{
 		Style: style,
 		Text:  e.PlaceHolder,
@@ -941,10 +989,32 @@ func (e *Entry) registerShortcut() {
 		e.selecting = false
 		moveWord(se)
 	}
-	e.shortcut.AddShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyLeft, Modifier: fyne.KeyModifierShortcutDefault}, unselectMoveWord)
-	e.shortcut.AddShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyLeft, Modifier: fyne.KeyModifierShortcutDefault | fyne.KeyModifierShift}, selectMoveWord)
-	e.shortcut.AddShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyRight, Modifier: fyne.KeyModifierShortcutDefault}, unselectMoveWord)
-	e.shortcut.AddShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyRight, Modifier: fyne.KeyModifierShortcutDefault | fyne.KeyModifierShift}, selectMoveWord)
+
+	moveWordModifier := fyne.KeyModifierShortcutDefault
+	if runtime.GOOS == "darwin" {
+		moveWordModifier = fyne.KeyModifierAlt
+
+		// Cmd+left, Cmd+right shortcuts behave like Home and End keys on Mac OS
+		shortcutHomeEnd := func(s fyne.Shortcut) {
+			e.selecting = false
+			if s.(*desktop.CustomShortcut).KeyName == fyne.KeyLeft {
+				e.typedKeyHome()
+			} else {
+				e.propertyLock.RLock()
+				provider := e.textProvider()
+				e.propertyLock.RUnlock()
+				e.typedKeyEnd(provider)
+			}
+			e.Refresh()
+		}
+		e.shortcut.AddShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyLeft, Modifier: fyne.KeyModifierSuper}, shortcutHomeEnd)
+		e.shortcut.AddShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyRight, Modifier: fyne.KeyModifierSuper}, shortcutHomeEnd)
+	}
+
+	e.shortcut.AddShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyLeft, Modifier: moveWordModifier}, unselectMoveWord)
+	e.shortcut.AddShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyLeft, Modifier: moveWordModifier | fyne.KeyModifierShift}, selectMoveWord)
+	e.shortcut.AddShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyRight, Modifier: moveWordModifier}, unselectMoveWord)
+	e.shortcut.AddShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyRight, Modifier: moveWordModifier | fyne.KeyModifierShift}, selectMoveWord)
 }
 
 func (e *Entry) requestFocus() {
@@ -1020,6 +1090,12 @@ func (e *Entry) selectingKeyHandler(key *fyne.KeyEvent) bool {
 	case fyne.KeyBackspace, fyne.KeyDelete:
 		// clears the selection -- return handled
 		e.setFieldsAndRefresh(e.eraseSelection)
+		e.propertyLock.Lock()
+		if e.OnChanged != nil {
+			e.OnChanged(e.Text)
+		}
+		e.propertyLock.Unlock()
+		e.Validate()
 		return true
 	case fyne.KeyReturn, fyne.KeyEnter:
 		if e.MultiLine {
@@ -1157,6 +1233,7 @@ func (e *Entry) textWrap() fyne.TextWrap {
 	if !e.MultiLine && (e.Wrapping == fyne.TextWrapBreak || e.Wrapping == fyne.TextWrapWord) {
 		fyne.LogError("Entry cannot wrap single line", nil)
 		e.Wrapping = fyne.TextTruncate
+		return fyne.TextWrapOff
 	}
 	return e.Wrapping
 }
@@ -1377,7 +1454,7 @@ func (r *entryRenderer) Layout(size fyne.Size) {
 	textPos := r.entry.textPosFromRowCol(r.entry.CursorRow, r.entry.CursorColumn)
 	selectPos := r.entry.textPosFromRowCol(r.entry.selectRow, r.entry.selectColumn)
 	r.entry.propertyLock.Unlock()
-	if r.entry.Wrapping == fyne.TextWrapOff {
+	if r.entry.Wrapping == fyne.TextWrapOff && r.entry.Scroll == widget.ScrollNone {
 		r.entry.content.Resize(entrySize)
 		r.entry.content.Move(entryPos)
 	} else {
@@ -1410,20 +1487,20 @@ func (r *entryRenderer) MinSize() fyne.Size {
 		return r.entry.content.MinSize().Add(fyne.NewSize(0, theme.InputBorderSize()*2))
 	}
 
+	innerPadding := theme.InnerPadding()
 	charMin := r.entry.placeholderProvider().charMinSize(r.entry.Password, r.entry.TextStyle)
-	minSize := charMin.Add(fyne.NewSquareSize(theme.InnerPadding()))
+	minSize := charMin.Add(fyne.NewSquareSize(innerPadding))
 
 	if r.entry.MultiLine {
 		count := r.entry.multiLineRows
 		if count <= 0 {
 			count = multiLineRows
 		}
-		// ensure multiline height is at least charMinSize * multilineRows
-		rowHeight := charMin.Height * float32(count)
-		minSize.Height = fyne.Max(minSize.Height, rowHeight+float32(count-1)*theme.LineSpacing())
+
+		minSize.Height = charMin.Height*float32(count) + innerPadding
 	}
 
-	return minSize.Add(fyne.NewSize(theme.InnerPadding()*2, theme.InnerPadding()))
+	return minSize.Add(fyne.NewSize(innerPadding*2, innerPadding))
 }
 
 func (r *entryRenderer) Objects() []fyne.CanvasObject {
@@ -1437,6 +1514,7 @@ func (r *entryRenderer) Refresh() {
 	r.entry.propertyLock.RLock()
 	content := r.entry.content
 	focusedAppearance := r.entry.focused && !r.entry.disabled
+	scroll := r.entry.Scroll
 	size := r.entry.size
 	wrapping := r.entry.Wrapping
 	r.entry.propertyLock.RUnlock()
@@ -1449,7 +1527,7 @@ func (r *entryRenderer) Refresh() {
 
 	// correct our scroll wrappers if the wrap mode changed
 	entrySize := size.Subtract(fyne.NewSize(r.trailingInset(), theme.InputBorderSize()*2))
-	if wrapping == fyne.TextWrapOff && r.scroll.Content != nil {
+	if wrapping == fyne.TextWrapOff && scroll == widget.ScrollNone && r.scroll.Content != nil {
 		r.scroll.Hide()
 		r.scroll.Content = nil
 		content.Move(fyne.NewPos(0, theme.InputBorderSize()))
@@ -1461,7 +1539,7 @@ func (r *entryRenderer) Refresh() {
 				break
 			}
 		}
-	} else if wrapping != fyne.TextWrapOff && r.scroll.Content == nil {
+	} else if (wrapping != fyne.TextWrapOff || scroll != widget.ScrollNone) && r.scroll.Content == nil {
 		r.scroll.Content = content
 		content.Move(fyne.NewPos(0, 0))
 		r.scroll.Move(fyne.NewPos(0, theme.InputBorderSize()))
@@ -1792,7 +1870,7 @@ func (r *entryContentRenderer) updateScrollDirections() {
 
 	switch r.content.entry.Wrapping {
 	case fyne.TextWrapOff:
-		r.content.scroll.Direction = widget.ScrollNone
+		r.content.scroll.Direction = r.content.entry.Scroll
 	case fyne.TextTruncate: // this is now the default - but we scroll
 		r.content.scroll.Direction = widget.ScrollBoth
 	default: // fyne.TextWrapBreak, fyne.TextWrapWord

@@ -134,11 +134,11 @@ func (w *window) doShow() {
 		return
 	}
 
-	run.Lock()
+	run.L.Lock()
 	for !run.flag {
-		run.cond.Wait()
+		run.Wait()
 	}
-	run.Unlock()
+	run.L.Unlock()
 
 	w.createLock.Do(w.create)
 	if w.view() == nil {
@@ -407,10 +407,9 @@ func (w *window) processMouseMoved(xpos float64, ypos float64) {
 	isMouseOverDragged := w.objIsDragged(mouseOver)
 	w.mouseLock.RUnlock()
 	if obj != nil && !isObjDragged {
-		ev := new(desktop.MouseEvent)
+		ev := &desktop.MouseEvent{Button: mouseButton}
 		ev.AbsolutePosition = mousePos
 		ev.Position = pos
-		ev.Button = mouseButton
 
 		if hovered, ok := obj.(desktop.Hoverable); ok {
 			if hovered == mouseOver {
@@ -447,7 +446,7 @@ func (w *window) processMouseMoved(xpos float64, ypos float64) {
 	if mouseDragged != nil && mouseButton != desktop.MouseButtonSecondary {
 		if w.mouseButton > 0 {
 			draggedObjDelta := mouseDraggedObjStart.Subtract(mouseDragged.(fyne.CanvasObject).Position())
-			ev := new(fyne.DragEvent)
+			ev := &fyne.DragEvent{}
 			ev.AbsolutePosition = mousePos
 			ev.Position = mousePos.Subtract(mouseDraggedOffset).Add(draggedObjDelta)
 			ev.Dragged = fyne.NewDelta(mousePos.X-mouseDragPos.X, mousePos.Y-mouseDragPos.Y)
@@ -521,22 +520,37 @@ func (w *window) processMouseClicked(button desktop.MouseButton, action action, 
 
 		return false
 	})
-	ev := new(fyne.PointEvent)
-	ev.Position = pos
-	ev.AbsolutePosition = mousePos
+	ev := &fyne.PointEvent{
+		Position:         pos,
+		AbsolutePosition: mousePos,
+	}
 
 	coMouse := co
 	if wid, ok := co.(desktop.Mouseable); ok {
-		mev := new(desktop.MouseEvent)
+		mev := &desktop.MouseEvent{
+			Button:   button,
+			Modifier: modifiers,
+		}
 		mev.Position = ev.Position
 		mev.AbsolutePosition = mousePos
-		mev.Button = button
-		mev.Modifier = modifiers
 		w.mouseClickedHandleMouseable(mev, action, wid)
 	}
 
 	if wid, ok := co.(fyne.Focusable); !ok || wid != w.canvas.Focused() {
-		w.canvas.Unfocus()
+		ignore := false
+		_, _, _ = w.findObjectAtPositionMatching(w.canvas, mousePos, func(object fyne.CanvasObject) bool {
+			switch object.(type) {
+			case fyne.Focusable:
+				ignore = true
+				return true
+			}
+
+			return false
+		})
+
+		if !ignore { // if a parent item under the mouse has focus then ignore this tap unfocus
+			w.canvas.Unfocus()
+		}
 	}
 
 	w.mouseLock.Lock()
@@ -569,7 +583,7 @@ func (w *window) processMouseClicked(button desktop.MouseButton, action action, 
 	}
 
 	_, tap := co.(fyne.Tappable)
-	_, altTap := co.(fyne.SecondaryTappable)
+	secondary, altTap := co.(fyne.SecondaryTappable)
 	if tap || altTap {
 		if action == press {
 			w.mouseLock.Lock()
@@ -578,7 +592,7 @@ func (w *window) processMouseClicked(button desktop.MouseButton, action action, 
 		} else if action == release {
 			if co == mousePressed {
 				if button == desktop.MouseButtonSecondary && altTap {
-					w.QueueEvent(func() { co.(fyne.SecondaryTappable).TappedSecondary(ev) })
+					w.QueueEvent(func() { secondary.TappedSecondary(ev) })
 				}
 			}
 		}
@@ -907,9 +921,7 @@ func (w *window) RunWithContext(f func()) {
 }
 
 func (w *window) RescaleContext() {
-	runOnMain(func() {
-		w.rescaleOnMain()
-	})
+	runOnMain(w.rescaleOnMain)
 }
 
 func (w *window) Context() interface{} {
@@ -935,8 +947,6 @@ func (d *gLDriver) createWindow(title string, decorate bool) fyne.Window {
 		title = defaultTitle
 	}
 	runOnMain(func() {
-		d.initGLFW()
-
 		ret = &window{title: title, decorate: decorate, driver: d}
 		// This queue is destroyed when the window is closed.
 		ret.InitEventQueue()
@@ -955,6 +965,9 @@ func (w *window) doShowAgain() {
 		return
 	}
 
+	runOnDraw(w, func() {
+		w.driver.repaintWindow(w)
+	})
 	runOnMain(func() {
 		// show top canvas element
 		if w.canvas.Content() != nil {

@@ -175,12 +175,18 @@ func (i *Image) Resize(s fyne.Size) {
 	if s == i.Size() {
 		return
 	}
-	if i.FillMode == ImageFillOriginal && i.size.Height > 2 { // don't refresh original scale images after first draw
+	i.baseObject.Resize(s)
+	if i.FillMode == ImageFillOriginal && i.size.Height > 2 { // we can just ask for a GPU redraw to align
+		Refresh(i)
 		return
 	}
 
 	i.baseObject.Resize(s)
-	i.Refresh()
+	if i.isSVG || i.Image == nil {
+		i.Refresh() // we need to rasterise at the new size
+	} else {
+		Refresh(i) // just re-size using GPU scaling
+	}
 }
 
 // NewImageFromFile creates a new image from a local file.

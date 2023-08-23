@@ -4,9 +4,58 @@ import (
 	"testing"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/theme"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestGridWrap_Focus(t *testing.T) {
+	defer test.NewApp()
+	list := createGridWrap(100)
+	window := test.NewWindow(list)
+	defer window.Close()
+	window.Resize(list.MinSize().Max(fyne.NewSize(150, 200)))
+
+	canvas := window.Canvas().(test.WindowlessCanvas)
+	assert.Nil(t, canvas.Focused())
+
+	canvas.FocusNext()
+	assert.NotNil(t, canvas.Focused())
+	assert.Equal(t, 0, canvas.Focused().(*GridWrap).currentFocus)
+
+	children := list.scroller.Content.(*fyne.Container).Layout.(*gridWrapLayout).children
+	assert.True(t, children[0].(*gridWrapItem).hovered)
+	assert.False(t, children[1].(*gridWrapItem).hovered)
+	assert.False(t, children[6].(*gridWrapItem).hovered)
+	assert.False(t, children[7].(*gridWrapItem).hovered)
+
+	list.TypedKey(&fyne.KeyEvent{Name: fyne.KeyDown})
+	assert.False(t, children[0].(*gridWrapItem).hovered)
+	assert.False(t, children[1].(*gridWrapItem).hovered)
+	assert.True(t, children[6].(*gridWrapItem).hovered)
+	assert.False(t, children[7].(*gridWrapItem).hovered)
+
+	list.TypedKey(&fyne.KeyEvent{Name: fyne.KeyRight})
+	assert.False(t, children[0].(*gridWrapItem).hovered)
+	assert.False(t, children[1].(*gridWrapItem).hovered)
+	assert.False(t, children[6].(*gridWrapItem).hovered)
+	assert.True(t, children[7].(*gridWrapItem).hovered)
+
+	list.TypedKey(&fyne.KeyEvent{Name: fyne.KeyLeft})
+	assert.False(t, children[0].(*gridWrapItem).hovered)
+	assert.False(t, children[1].(*gridWrapItem).hovered)
+	assert.True(t, children[6].(*gridWrapItem).hovered)
+	assert.False(t, children[7].(*gridWrapItem).hovered)
+
+	list.TypedKey(&fyne.KeyEvent{Name: fyne.KeyUp})
+	assert.True(t, children[0].(*gridWrapItem).hovered)
+	assert.False(t, children[1].(*gridWrapItem).hovered)
+	assert.False(t, children[6].(*gridWrapItem).hovered)
+	assert.False(t, children[7].(*gridWrapItem).hovered)
+
+	canvas.Focused().TypedKey(&fyne.KeyEvent{Name: fyne.KeySpace})
+	assert.True(t, children[0].(*gridWrapItem).selected)
+}
 
 func TestGridWrap_New(t *testing.T) {
 	g := createGridWrap(1000)
@@ -108,6 +157,34 @@ func TestGridWrap_IndexIsInt(t *testing.T) {
 	// It allows the same update item function to be shared between both widgets if necessary.
 	gw.UpdateItem = func(id GridWrapItemID, item fyne.CanvasObject) {}
 	gw.UpdateItem = func(id int, item fyne.CanvasObject) {}
+}
+
+func TestGridWrap_RefreshItem(t *testing.T) {
+	data := make([]string, 5)
+	for i := 0; i < 5; i++ {
+		data[i] = "Text"
+	}
+
+	list := NewGridWrap(
+		func() int {
+			return len(data)
+		},
+		func() fyne.CanvasObject {
+			icon := NewLabel("dummy")
+			return icon
+		},
+		func(id GridWrapItemID, item fyne.CanvasObject) {
+			item.(*Label).SetText(data[id])
+		},
+	)
+	list.Resize(fyne.NewSize(50, 100))
+
+	data[2] = "Replace"
+	list.RefreshItem(2)
+
+	children := list.scroller.Content.(*fyne.Container).Layout.(*gridWrapLayout).children
+	assert.Equal(t, children[1].(*gridWrapItem).child.(*Label).Text, "Text")
+	assert.Equal(t, children[2].(*gridWrapItem).child.(*Label).Text, "Replace")
 }
 
 func TestGridWrap_Selection(t *testing.T) {

@@ -65,7 +65,7 @@ func (s *Select) CreateRenderer() fyne.WidgetRenderer {
 	txtProv := NewRichTextWithText(s.Selected)
 	txtProv.inset = fyne.NewSize(theme.Padding(), theme.Padding())
 	txtProv.ExtendBaseWidget(txtProv)
-	txtProv.Wrapping = fyne.TextTruncate
+	txtProv.Truncation = fyne.TextTruncateClip
 	if s.disabled {
 		txtProv.Segments[0].(*TextSegment).Style.ColorName = theme.ColorNameDisabled
 	}
@@ -252,6 +252,10 @@ func (s *Select) showPopUp() {
 	s.popUp.alignment = s.Alignment
 	s.popUp.ShowAtPosition(s.popUpPos())
 	s.popUp.Resize(fyne.NewSize(s.Size().Width, s.popUp.MinSize().Height))
+	s.popUp.OnDismiss = func() {
+		s.popUp.Hide()
+		s.popUp = nil
+	}
 }
 
 func (s *Select) tapAnimation() {
