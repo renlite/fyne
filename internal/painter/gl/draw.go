@@ -78,17 +78,24 @@ func (p *painter) drawObject(o fyne.CanvasObject, pos fyne.Position, frame fyne.
 	case *canvas.Raster:
 		p.drawRaster(obj, pos, frame)
 	case *canvas.Rectangle:
-		//*** p.drawRectangle(obj, pos, frame)
-		p.renderCanvasObject(o, pos, frame)
+		/*single*/
+		p.drawRectangle(obj, pos, frame)
+		/*group*/
+		/*multi*/
+		//--> p.renderCanvasObject(o, pos, frame)
 	case *canvas.Text:
-		//***p.drawText(obj, pos, frame)
-		p.renderCanvasObject(o, pos, frame)
+		/*single*/
+		p.drawText(obj, pos, frame)
+		/*group*/
+		/*multi*/
+		//--> p.renderCanvasObject(o, pos, frame)
 	case *canvas.LinearGradient:
 		p.drawGradient(obj, p.newGlLinearGradientTexture, pos, frame)
 	case *canvas.RadialGradient:
 		p.drawGradient(obj, p.newGlRadialGradientTexture, pos, frame)
 	case *canvas.Shape:
-		p.drawShapes(10.0, frame)
+		/*multi*/
+		//--> p.drawShapes(10.0, frame)
 	}
 }
 
@@ -167,6 +174,21 @@ func (p *painter) drawRectangle(rect *canvas.Rectangle, pos fyne.Position, frame
 	p.freeBuffer(vbo)
 }
 
+func (p *painter) renderRectangle(rect *canvas.Rectangle, pos fyne.Position, frame fyne.Size) {
+	if (rect.FillColor == color.Transparent || rect.FillColor == nil) && (rect.StrokeColor == color.Transparent || rect.StrokeColor == nil || rect.StrokeWidth == 0) {
+		return
+	}
+
+	roundedCorners := rect.CornerRadius != 0
+	if roundedCorners {
+		rectPoints := p.groupVecRectCoords(pos, rect, frame)
+		p.rectPoints = append(p.rectPoints, rectPoints...)
+	} else {
+		roundRectPoints := p.groupVecRectCoords(pos, rect, frame)
+		p.roundRectPoints = append(p.roundRectPoints, roundRectPoints...)
+	}
+}
+
 func (p *painter) renderCanvasObject(o fyne.CanvasObject, pos fyne.Position, frame fyne.Size) {
 	var shapeType float32
 	switch obj := o.(type) {
@@ -178,13 +200,13 @@ func (p *painter) renderCanvasObject(o fyne.CanvasObject, pos fyne.Position, fra
 		} else {
 			shapeType = 1.0
 		}
-		println("ShapeType: ", shapeType)
+		//println("ShapeType: ", shapeType)
 		if (rect.FillColor == color.Transparent || rect.FillColor == nil) && (rect.StrokeColor == color.Transparent || rect.StrokeColor == nil || rect.StrokeWidth == 0) {
 			return
 		}
 		rectPoints := p.groupVecRectCoords(pos, rect, frame)
-		p.points = append(p.points, rectPoints...)
-		println(p.points)
+		p.multiPoints = append(p.multiPoints, rectPoints...)
+		//println(p.multiPoints)
 		/*
 			NOT USED
 			for i := 0; i < 6; i++ {
@@ -199,7 +221,7 @@ func (p *painter) renderCanvasObject(o fyne.CanvasObject, pos fyne.Position, fra
 	case *canvas.Text:
 		text := obj // Re-Assignment for better readability
 		shapeType = 3.0
-		println("ShapeType: ", shapeType)
+		//println("ShapeType: ", shapeType)
 		if text.Text == "" || text.Text == " " {
 			return
 		}
@@ -221,18 +243,18 @@ func (p *painter) renderCanvasObject(o fyne.CanvasObject, pos fyne.Position, fra
 		size, _ = roundToPixelCoords(size, text.Position(), p.pixScale)
 		size.Width += roundToPixel(paint.VectorPad(text), p.pixScale)
 		texturePoints := p.renderTextureWithDetails(shapeType, text, p.newGlTextTexture, pos, size, frame, canvas.ImageFillStretch, 1.0, 0)
-		p.points = append(p.points, texturePoints...)
+		p.multiPoints = append(p.multiPoints, texturePoints...)
 
 		//p.textureIdx += 1
 	}
 }
 
 func (p *painter) drawShapes(shapeType float32, frame fyne.Size) {
-	println("ShapeType: 10.0 (Draw shapes NOW!)")
+	//println("ShapeType: 10.0 (Draw shapes NOW!)")
 	//fmt.Println(p.points)
-	var program = p.shapeProgram
+	var program = p.multiProgram
 	p.ctx.UseProgram(program)
-	vbo := p.createBuffer(p.points)
+	vbo := p.createBuffer(p.multiPoints)
 	p.defineVertexArray(program, "att_vert", 2, 18, 0)
 	p.defineVertexArray(program, "att_type", 4, 18, 2)
 	p.defineVertexArray(program, "att_fill_color", 4, 18, 6)
@@ -259,10 +281,10 @@ func (p *painter) drawShapes(shapeType float32, frame fyne.Size) {
 		p.ctx.Uniform1i(sampler3, 3)
 	*/
 	p.logError()
-	println(len(p.textures))
+	//println(len(p.textures))
 	var values []int32
 	for idx, texture := range p.textures {
-		println(idx)
+		//println(idx)
 		/*
 			switch idx {
 			case 0:
@@ -281,14 +303,14 @@ func (p *painter) drawShapes(shapeType float32, frame fyne.Size) {
 		p.logError()
 	}
 	samplers := p.ctx.GetUniformLocation(program, "textures")
-	p.ctx.Uniform1iv(samplers, int32(len(p.textures)), &values[0])
+	p.ctx.Uniform1iv(samplers, values)
 
-	println(len(p.points) / 18)
-	println(p.points)
-	p.ctx.DrawArrays(triangles, 0, (len(p.points) / 18))
+	//println(len(p.multiPoints) / 18)
+	//println(p.multiPoints)
+	p.ctx.DrawArrays(triangles, 0, (len(p.multiPoints) / 18))
 	p.logError()
 	p.freeBuffer(vbo)
-	p.points = nil
+	p.multiPoints = nil
 	p.textures = nil
 }
 
@@ -482,7 +504,7 @@ func (p *painter) groupRectCoords(shapeType float32, size fyne.Size, pos fyne.Po
 	y1Pos := pos.Y - pad
 	y2Pos := pos.Y + size.Height + pad
 
-	println("in groupRectCoord")
+	//println("in groupRectCoord")
 	return []float32{
 		/* TEMPLATE OLD for triangleStrip
 		// coord x, y, z texture x, y

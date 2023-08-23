@@ -28,8 +28,10 @@ func shaderSourceNamed(name string) ([]byte, []byte) {
 		return shaderRectangleesVert.StaticContent, shaderRectangleesFrag.StaticContent
 	case "round_rectangle_es":
 		return shaderRectangleesVert.StaticContent, shaderRoundrectangleesFrag.StaticContent
-	case "group_shape":
-		return shaderGroupShapeVert.StaticContent, shaderGroupShapeFrag.StaticContent
+	case "multi":
+		return shaderMultiVert.StaticContent, shaderMultiFrag.StaticContent
+	case "multi_es":
+		return shaderMultiesVert.StaticContent, shaderMultiesFrag.StaticContent
 	}
 	return nil, nil
 }
@@ -73,11 +75,18 @@ type painter struct {
 	lineProgram           Program
 	rectangleProgram      Program
 	roundRectangleProgram Program
-	shapeProgram          Program
+	multiProgram          Program
 	texScale              float32
 	pixScale              float32 // pre-calculate scale*texScale for each draw
-	points                []float32
-	textures              []Texture
+	// multi_shader
+	multiPoints []float32
+	// group_shaders
+	rectPoints      []float32
+	roundRectPoints []float32
+	linePoints      []float32
+	texturePoints   []float32
+
+	textures []Texture
 }
 
 // Declare conformity to Painter interface

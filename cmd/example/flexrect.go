@@ -1,44 +1,64 @@
-/*
 package main
 
 import (
 	"image/color"
 	"log"
 
+	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/canvas"
+
+	. "fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
-	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
-
 
 func main() {
 
 	myApp := app.New()
 	myWindow := myApp.NewWindow("Box Layout")
 
-	text1 := canvas.NewText("Hello", color.Black)
-	text2 := canvas.NewText("There", color.Black)
+	text1 := canvas.NewText("Column left", color.Black)
+	text2 := canvas.NewText("Column right", color.Black)
 	btn1 := widget.NewButton("click me", func() {
 		log.Println("tapped")
 	})
-	btn2 := widget.NewButtonWithIcon("Home", theme.HomeIcon(), func() {
+	btn1.Resize((fyne.Size{Width: 200.0}))
+	btn2 := widget.NewButton("Home", func() {
 		log.Println("tapped home")
 	})
-	content := container.New(layout.NewHBoxLayout(), text1, text2, layout.NewSpacer(), btn1, btn2)
+	btn3 := widget.NewButton("Done", func() {
+		log.Println("tapped done")
+	})
+	btn4 := widget.NewButton("New", func() {
+		log.Println("tapped ...")
+	})
+	btn5 := widget.NewButton("Save", func() {
+		log.Println("tapped ...")
+	})
+	btn6 := widget.NewButton("Delete", func() {
+		log.Println("tapped ...")
+	})
+	btn7 := widget.NewButton("Execute", func() {
+		log.Println("tapped ...")
+	})
+	btn8 := widget.NewButton("Execute", func() {
+		log.Println("tapped ...")
+	})
+	contentLeft := container.New(layout.NewVBoxLayout(), text1, btn1, btn2, btn3, btn4, btn5, btn6, btn7)
 
-	text4 := canvas.NewText("centered", color.White)
-	centered := container.New(layout.NewHBoxLayout(), layout.NewSpacer(), text4, layout.NewSpacer())
-	myWindow.SetContent(container.New(layout.NewVBoxLayout(), content, centered))
+	shape := Shape{}
+	contentRight := container.New(layout.NewVBoxLayout(), text2, btn8, &shape)
+	gridCont := container.NewGridWithColumns(2, contentLeft, contentRight)
+
+	myWindow.SetContent(gridCont)
+	myWindow.Resize(fyne.NewSize(800, 600))
 	myWindow.ShowAndRun()
 
-	myWindow.SetContent(content)
-	myWindow.ShowAndRun()
 }
-*/
 
+/*
 package main
 
 import (
@@ -123,7 +143,7 @@ func main() {
 	//egText.Resize((fyne.NewSize(200, 50)))
 	egText.Move(fyne.NewPos(160, 160))
 
-	shape := Shape{}
+	//shape := Shape{}
 
 	cont := container.NewWithoutLayout(
 		&rr1,
@@ -134,10 +154,12 @@ func main() {
 		btn1,
 		egText,
 		&rr7,
-		&shape,
+		//&shape,
 	)
 	myWindow.SetContent(cont)
 	myWindow.Resize(fyne.NewSize(900, 600))
 
 	myWindow.ShowAndRun()
 }
+
+*/

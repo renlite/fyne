@@ -67,6 +67,7 @@ func (p *painter) Init() {
 	p.lineProgram = p.createProgram("line_es")
 	p.rectangleProgram = p.createProgram("rectangle_es")
 	p.roundRectangleProgram = p.createProgram("round_rectangle_es")
+	p.multiProgram = p.createProgram("multi_es")
 }
 
 type xjsContext struct{}
@@ -214,6 +215,18 @@ func (c *xjsContext) TexImage2D(target uint32, level, width, height int, colorFo
 
 func (c *xjsContext) TexParameteri(target, param uint32, value int32) {
 	gl.TexParameteri(gl.Enum(target), gl.Enum(param), int(value))
+}
+
+func (c *xjsContext) Uniform1fv(uniform Uniform, v []float32) {
+	gl.Uniform1fv(gl.Uniform(uniform), v)
+}
+
+func (c *xjsContext) Uniform1iv(uniform Uniform, v []int32) {
+	gl.Uniform1iv(gl.Uniform(uniform), v)
+}
+
+func (c *xjsContext) Uniform1i(uniform Uniform, v int32) {
+	gl.Uniform1i(gl.Uniform(uniform), int(v))
 }
 
 func (c *xjsContext) Uniform1f(uniform Uniform, v float32) {

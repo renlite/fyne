@@ -78,7 +78,7 @@ func (p *painter) Init() {
 	p.lineProgram = p.createProgram("line")
 	p.rectangleProgram = p.createProgram("rectangle")
 	p.roundRectangleProgram = p.createProgram("round_rectangle")
-	p.shapeProgram = p.createProgram("group_shape")
+	p.multiProgram = p.createProgram("multi")
 }
 
 type coreContext struct{}
@@ -250,12 +250,14 @@ func (c *coreContext) TexParameteri(target, param uint32, value int32) {
 	gl.TexParameteri(target, param, value)
 }
 
-func (c *coreContext) Uniform1fv(uniform Uniform, count int32, v *float32) {
-	gl.Uniform1fv(int32(uniform), count, v)
+func (c *coreContext) Uniform1fv(uniform Uniform, v []float32) {
+	// &v[0] is the pointer to the first value of the slice - starting Memory-Adress of the array
+	gl.Uniform1fv(int32(uniform), int32(len(v)), &v[0])
 }
 
-func (c *coreContext) Uniform1iv(uniform Uniform, count int32, v *int32) {
-	gl.Uniform1iv(int32(uniform), count, v)
+func (c *coreContext) Uniform1iv(uniform Uniform, v []int32) {
+	// &v[0] is the pointer to the first value of the slice - starting Memory-Adress of the array
+	gl.Uniform1iv(int32(uniform), int32(len(v)), &v[0])
 }
 
 func (c *coreContext) Uniform1i(uniform Uniform, v int32) {

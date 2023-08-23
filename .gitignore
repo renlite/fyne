@@ -52,3 +52,8 @@ Session.vim
 tags
 # Persistent undo
 [._]*.un~
+
+#Renlite
+cmd/example/wasm/
+cmd/example/icon.png
+cmd/fyne_demo/wasm/
