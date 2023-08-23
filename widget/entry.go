@@ -487,9 +487,16 @@ func (e *Entry) Append(text string) {
 	e.propertyLock.Lock()
 	provider := e.textProvider()
 	provider.insertAt(provider.len(), text)
-	e.updateText(provider.String())
+	content := provider.String()
+	changed := e.updateText(content)
 	e.propertyLock.Unlock()
 
+	if changed {
+		e.Validate()
+		if e.OnChanged != nil {
+			e.OnChanged(content)
+		}
+	}
 	e.Refresh()
 }
 
@@ -656,11 +663,18 @@ func (e *Entry) TypedKey(key *fyne.KeyEvent) {
 	}
 
 	e.propertyLock.Lock()
-	e.updateText(provider.String())
+	content := provider.String()
+	changed := e.updateText(content)
 	if e.CursorRow == e.selectRow && e.CursorColumn == e.selectColumn {
 		e.selecting = false
 	}
 	e.propertyLock.Unlock()
+	if changed {
+		e.Validate()
+		if e.OnChanged != nil {
+			e.OnChanged(content)
+		}
+	}
 	e.Refresh()
 }
 
@@ -831,6 +845,12 @@ func (e *Entry) cutToClipboard(clipboard fyne.Clipboard) {
 
 	e.copyToClipboard(clipboard)
 	e.setFieldsAndRefresh(e.eraseSelection)
+	e.propertyLock.Lock()
+	if e.OnChanged != nil {
+		e.OnChanged(e.Text)
+	}
+	e.propertyLock.Unlock()
+	e.Validate()
 }
 
 // eraseSelection removes the current selected region and moves the cursor
@@ -1070,6 +1090,12 @@ func (e *Entry) selectingKeyHandler(key *fyne.KeyEvent) bool {
 	case fyne.KeyBackspace, fyne.KeyDelete:
 		// clears the selection -- return handled
 		e.setFieldsAndRefresh(e.eraseSelection)
+		e.propertyLock.Lock()
+		if e.OnChanged != nil {
+			e.OnChanged(e.Text)
+		}
+		e.propertyLock.Unlock()
+		e.Validate()
 		return true
 	case fyne.KeyReturn, fyne.KeyEnter:
 		if e.MultiLine {
@@ -1461,20 +1487,20 @@ func (r *entryRenderer) MinSize() fyne.Size {
 		return r.entry.content.MinSize().Add(fyne.NewSize(0, theme.InputBorderSize()*2))
 	}
 
+	innerPadding := theme.InnerPadding()
 	charMin := r.entry.placeholderProvider().charMinSize(r.entry.Password, r.entry.TextStyle)
-	minSize := charMin.Add(fyne.NewSquareSize(theme.InnerPadding()))
+	minSize := charMin.Add(fyne.NewSquareSize(innerPadding))
 
 	if r.entry.MultiLine {
 		count := r.entry.multiLineRows
 		if count <= 0 {
 			count = multiLineRows
 		}
-		// ensure multiline height is at least charMinSize * multilineRows
-		rowHeight := charMin.Height * float32(count)
-		minSize.Height = fyne.Max(minSize.Height, rowHeight+float32(count-1)*theme.LineSpacing())
+
+		minSize.Height = charMin.Height*float32(count) + innerPadding
 	}
 
-	return minSize.Add(fyne.NewSize(theme.InnerPadding()*2, theme.InnerPadding()))
+	return minSize.Add(fyne.NewSize(innerPadding*2, innerPadding))
 }
 
 func (r *entryRenderer) Objects() []fyne.CanvasObject {
