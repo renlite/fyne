@@ -170,6 +170,10 @@ func (w *window) doShow() {
 	// show top canvas element
 	if w.canvas.Content() != nil {
 		w.canvas.Content().Show()
+
+		runOnDraw(w, func() {
+			w.driver.repaintWindow(w)
+		})
 	}
 }
 
@@ -947,6 +951,8 @@ func (d *gLDriver) createWindow(title string, decorate bool) fyne.Window {
 		title = defaultTitle
 	}
 	runOnMain(func() {
+		d.initGLFW()
+
 		ret = &window{title: title, decorate: decorate, driver: d}
 		// This queue is destroyed when the window is closed.
 		ret.InitEventQueue()
@@ -965,9 +971,6 @@ func (w *window) doShowAgain() {
 		return
 	}
 
-	runOnDraw(w, func() {
-		w.driver.repaintWindow(w)
-	})
 	runOnMain(func() {
 		// show top canvas element
 		if w.canvas.Content() != nil {
