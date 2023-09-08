@@ -72,9 +72,10 @@ func (w *Base) Position() fyne.Position {
 func (w *Base) Move(pos fyne.Position) {
 	w.propertyLock.Lock()
 	w.position = pos
+	impl := w.impl
 	w.propertyLock.Unlock()
 
-	Repaint(w.super())
+	Repaint(impl)
 }
 
 // MinSize for the widget - it should never be resized below this value.
@@ -163,11 +164,12 @@ func (w *Base) super() fyne.Widget {
 // Repaint instructs the containing canvas to redraw, even if nothing changed.
 // This method is a duplicate of what is in `canvas/canvas.go` to avoid a dependency loop or public API.
 func Repaint(obj fyne.CanvasObject) {
-	if fyne.CurrentApp() == nil || fyne.CurrentApp().Driver() == nil {
+	app := fyne.CurrentApp()
+	if app == nil || app.Driver() == nil {
 		return
 	}
 
-	c := fyne.CurrentApp().Driver().CanvasForObject(obj)
+	c := app.Driver().CanvasForObject(obj)
 	if c != nil {
 		if paint, ok := c.(interface{ SetDirty() }); ok {
 			paint.SetDirty()
