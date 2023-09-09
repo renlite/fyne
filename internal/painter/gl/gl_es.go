@@ -51,6 +51,7 @@ const (
 
 const noBuffer = Buffer(0)
 const noShader = Shader(0)
+const textureBuffer = 16
 
 type (
 	// Attribute represents a GL attribute

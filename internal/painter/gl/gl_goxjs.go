@@ -41,6 +41,8 @@ const (
 	vertexShader          = gl.VERTEX_SHADER
 )
 
+const textureBuffer = 16
+
 type (
 	// Attribute represents a GL attribute
 	Attribute gl.Attrib

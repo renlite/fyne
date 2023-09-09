@@ -67,6 +67,9 @@ func (p *painter) drawLine(line *canvas.Line, pos fyne.Position, frame fyne.Size
 	p.freeBuffer(vbo)
 }
 
+// pos = Container position (x/y)
+// frame = Window size GLFW (width/height)
+
 /*
 func (p *painter) drawObject(o fyne.CanvasObject, pos fyne.Position, frame fyne.Size) {
 	switch obj := o.(type) {
@@ -195,7 +198,10 @@ func (p *painter) renderCanvasObject(o fyne.CanvasObject, pos fyne.Position, fra
 	var shapeType float32
 	switch obj := o.(type) {
 	case *canvas.Rectangle:
-		rect := obj // Re-Assignment for better readability
+		rect := obj //Re-Assignment for better readability
+		if (rect.FillColor == color.Transparent || rect.FillColor == nil) && (rect.StrokeColor == color.Transparent || rect.StrokeColor == nil || rect.StrokeWidth == 0) {
+			return
+		}
 		roundedCorners := rect.CornerRadius != 0
 		if roundedCorners {
 			shapeType = 2.0
@@ -203,31 +209,71 @@ func (p *painter) renderCanvasObject(o fyne.CanvasObject, pos fyne.Position, fra
 			shapeType = 1.0
 		}
 		//println("ShapeType: ", shapeType)
-		if (rect.FillColor == color.Transparent || rect.FillColor == nil) && (rect.StrokeColor == color.Transparent || rect.StrokeColor == nil || rect.StrokeWidth == 0) {
-			return
-		}
+
 		rectPoints := p.groupVecRectCoords(pos, rect, frame)
 		p.multiPoints = append(p.multiPoints, rectPoints...)
-		//println(p.multiPoints)
-		/*
-			NOT USED
-			for i := 0; i < 6; i++ {
-				points[i*18+2] = shapeType
-				points[i*18+3] = rect.StrokeWidth
-				points[i*18+4] = rect.CornerRadius
-				points[i*18+5] = 0.0 // NOT USED
+	//println(p.multiPoints)
+	/*
+		NOT USED
+		for i := 0; i < 6; i++ {
+			points[i*18+2] = shapeType
+			points[i*18+3] = rect.StrokeWidth
+			points[i*18+4] = rect.CornerRadius
+			points[i*18+5] = 0.0 // NOT USED
 
+		}
+	*/
+	case *canvas.Circle:
+		// Conversion of Circle to Rectangle with CornerRaius = 0.5 * (Width or Height)
+		circleDiameter := obj.Position1.X - obj.Position2.X
+		rect := canvas.Rectangle{FillColor: obj.FillColor,
+			StrokeColor:  obj.StrokeColor,
+			StrokeWidth:  obj.StrokeWidth,
+			CornerRadius: 0.5 * circleDiameter}
+		rect.Move(obj.Position1)
+		rect.Resize(fyne.Size{Width: circleDiameter, Height: circleDiameter})
+		shapeType = 2.0 // Rectangle with CornerRadius
+		rectPoints := p.groupVecRectCoords(pos, &rect, frame)
+		p.multiPoints = append(p.multiPoints, rectPoints...)
+	case *canvas.Line:
+		if obj.StrokeColor == color.Transparent || obj.StrokeColor == nil || obj.StrokeWidth == 0 {
+			return
+		}
+		// Conversion of horizontal/vertical Line to Rectangle
+		var rectPosition fyne.Position
+		var rectSize fyne.Size
+		if obj.Position1.X == obj.Position2.X {
+			// vertical line
+			rectPosition.X = obj.Position1.X - obj.StrokeWidth*0.5
+			rectPosition.Y = obj.Position1.Y
+			rectSize.Width = obj.StrokeWidth
+			rectSize.Height = obj.Position2.Y - obj.Position1.Y
+			if rectSize.Height < 0.00 {
+				rectSize.Height = rectSize.Height * (-1)
 			}
-		*/
-
+		} else {
+			// horizontal line
+			rectPosition.X = obj.Position1.X
+			rectPosition.Y = obj.Position1.Y - obj.StrokeWidth*0.5
+			rectSize.Height = obj.StrokeWidth
+			rectSize.Width = obj.Position2.X - obj.Position1.X
+			if rectSize.Width < 0.00 {
+				rectSize.Width = rectSize.Width * (-1)
+			}
+		}
+		rect := canvas.Rectangle{FillColor: obj.StrokeColor}
+		rect.Move(rectPosition)
+		rect.Resize(rectSize)
+		shapeType = 1.0 // Rectangle
+		rectPoints := p.groupVecRectCoords(pos, &rect, frame)
+		p.multiPoints = append(p.multiPoints, rectPoints...)
 	case *canvas.Text:
-		text := obj // Re-Assignment for better readability
+		text := obj //Re-Assignment for better readability
 		shapeType = 3.0
 		//println("ShapeType: ", shapeType)
 		if text.Text == "" || text.Text == " " {
 			return
 		}
-
 		size := text.MinSize()
 		containerSize := text.Size()
 		switch text.Alignment {
@@ -246,8 +292,17 @@ func (p *painter) renderCanvasObject(o fyne.CanvasObject, pos fyne.Position, fra
 		size.Width += roundToPixel(paint.VectorPad(text), p.pixScale)
 		texturePoints := p.renderTextureWithDetails(shapeType, text, p.newGlTextTexture, pos, size, frame, canvas.ImageFillStretch, 1.0, 0)
 		p.multiPoints = append(p.multiPoints, texturePoints...)
-
 		//p.textureIdx += 1
+	case *canvas.Image:
+		img := obj //Re-Assignment for better readability
+		shapeType = 3.0
+		imgPoints := p.renderTextureWithDetails(shapeType, img, p.newGlImageTexture, pos, img.Size(), frame, img.FillMode, float32(img.Alpha()), 0)
+		p.multiPoints = append(p.multiPoints, imgPoints...)
+	case *canvas.Raster:
+		img := obj //Re-Assignment for better readability
+		shapeType = 3.0
+		imgPoints := p.renderTextureWithDetails(shapeType, img, p.newGlRasterTexture, pos, img.Size(), frame, canvas.ImageFillStretch, float32(img.Alpha()), 0)
+		p.multiPoints = append(p.multiPoints, imgPoints...)
 	}
 }
 
@@ -598,6 +653,7 @@ func (p *painter) vecRectCoords(pos fyne.Position, rect *canvas.Rectangle, frame
 	size := rect.Size()
 	pos1 := rect.Position()
 
+	println(pos.X, "<>", pos1.X)
 	xPosDiff := pos.X - pos1.X
 	yPosDiff := pos.Y - pos1.Y
 	pos1.X = roundToPixel(pos1.X+xPosDiff, p.pixScale)
