@@ -18,6 +18,7 @@ type context interface {
 	DeleteBuffer(buffer Buffer)
 	DeleteTexture(texture Texture)
 	Disable(capability uint32)
+	DisableVertexAttribArray(attribute Attribute)
 	DrawArrays(mode uint32, first, count int)
 	Enable(capability uint32)
 	EnableVertexAttribArray(attribute Attribute)

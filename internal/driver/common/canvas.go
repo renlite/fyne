@@ -435,6 +435,7 @@ func (c *Canvas) WalkTrees(
 	beforeChildren func(*RenderCacheNode, fyne.Position),
 	afterChildren func(*RenderCacheNode, fyne.Position),
 ) {
+	//start := time.Now()
 	c.walkTree(c.contentTree, beforeChildren, afterChildren)
 	if c.mWindowHeadTree != nil && c.mWindowHeadTree.root.obj != nil {
 		c.walkTree(c.mWindowHeadTree, beforeChildren, afterChildren)
@@ -447,6 +448,7 @@ func (c *Canvas) WalkTrees(
 			c.walkTree(tree, beforeChildren, afterChildren)
 		}
 	}
+	//println(time.Since(start))
 }
 
 func (c *Canvas) focusManager() *app.FocusManager {
@@ -524,6 +526,7 @@ func (c *Canvas) walkTree(
 		node = node.nextSibling
 	}
 	driver.WalkVisibleObjectTree(tree.root.obj, bc, ac)
+	c.Painter().FinishDrawing()
 }
 
 // RenderCacheNode represents a node in a render cache tree.

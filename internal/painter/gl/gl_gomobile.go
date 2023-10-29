@@ -76,12 +76,16 @@ func (p *painter) Init() {
 			p.createProgram("simple_es"),
 			p.createProgram("line_es"),
 			p.createProgram("rectangle_es"),
-			p.createProgram("round_rectangle_es")}
+			p.createProgram("round_rectangle_es")
+			p.createProgram("group_round_rectangle_es")
+			p.createProgram("group_texture_es")}
 	}
 	p.program = compiled[0]
 	p.lineProgram = compiled[1]
 	p.rectangleProgram = compiled[2]
 	p.roundRectangleProgram = compiled[3]
+	p.groupRoundRectProgram = compiled[4]
+	p.groupTextureProgram = compiled[4]
 }
 
 // f32Bytes returns the byte representation of float32 values in the given byte

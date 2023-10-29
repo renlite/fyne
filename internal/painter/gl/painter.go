@@ -32,6 +32,14 @@ func shaderSourceNamed(name string) ([]byte, []byte) {
 		return shaderMultiVert.StaticContent, shaderMultiFrag.StaticContent
 	case "multi_es":
 		return shaderMultiesVert.StaticContent, shaderMultiesFrag.StaticContent
+	case "group_round_rectangle":
+		return shaderGroupRoundrectangleVert.StaticContent, shaderGroupRoundrectangleFrag.StaticContent
+	case "group_texture":
+		return shaderGroupTextureVert.StaticContent, shaderGroupTextureFrag.StaticContent
+	case "group_round_rectangle_es":
+		return shaderGroupRoundrectangleesVert.StaticContent, shaderGroupRoundrectangleesFrag.StaticContent
+	case "group_texture_es":
+		return shaderGroupTextureesVert.StaticContent, shaderGroupTextureesFrag.StaticContent
 	}
 	return nil, nil
 }
@@ -56,6 +64,8 @@ type Painter interface {
 	StartClipping(fyne.Position, fyne.Size)
 	// StopClipping stops clipping paint actions.
 	StopClipping()
+
+	FinishDrawing()
 }
 
 // NewPainter creates a new GL based renderer for the provided canvas.
@@ -64,7 +74,15 @@ func NewPainter(c fyne.Canvas, ctx driver.WithContext) Painter {
 	p := &painter{canvas: c, contextProvider: ctx}
 	p.SetFrameBufferScale(1.0)
 	p.textures = nil
+	p.groupLayers = append(p.groupLayers, groupLayer{})
 	return p
+}
+
+type groupLayer struct {
+	//rectPoints      []float32
+	roundRectPoints []float32
+	linePoints      []float32
+	texturePoints   []float32
 }
 
 type painter struct {
@@ -75,18 +93,21 @@ type painter struct {
 	lineProgram           Program
 	rectangleProgram      Program
 	roundRectangleProgram Program
-	multiProgram          Program
 	texScale              float32
 	pixScale              float32 // pre-calculate scale*texScale for each draw
-	// multi_shader
-	multiPoints []float32
-	// group_shaders
-	rectPoints      []float32
-	roundRectPoints []float32
-	linePoints      []float32
-	texturePoints   []float32
 
-	textures []Texture
+	// *multi_shader
+	multiProgram Program
+	multiPoints  []float32
+
+	// *group_shaders
+	groupRoundRectProgram Program
+	//groupLineProgram      Program
+	groupTextureProgram Program
+	groupLayers         []groupLayer
+
+	textures    []Texture
+	textrureIdx int
 }
 
 // Declare conformity to Painter interface
@@ -97,6 +118,10 @@ func (p *painter) Clear() {
 	p.ctx.ClearColor(float32(r)/max16bit, float32(g)/max16bit, float32(b)/max16bit, float32(a)/max16bit)
 	p.ctx.Clear(bitColorBuffer | bitDepthBuffer)
 	p.logError()
+}
+
+func (p *painter) FinishDrawing() {
+	p.drawShapes(p.canvas.Size())
 }
 
 func (p *painter) Free(obj fyne.CanvasObject) {

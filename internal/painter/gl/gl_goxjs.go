@@ -70,6 +70,8 @@ func (p *painter) Init() {
 	p.rectangleProgram = p.createProgram("rectangle_es")
 	p.roundRectangleProgram = p.createProgram("round_rectangle_es")
 	p.multiProgram = p.createProgram("multi_es")
+	p.groupRoundRectProgram = p.createProgram("group_round_rectangle_es")
+	p.groupTextureProgram = p.createProgram("group_texture_es")
 }
 
 type xjsContext struct{}
@@ -142,6 +144,10 @@ func (c *xjsContext) DeleteTexture(texture Texture) {
 
 func (c *xjsContext) Disable(capability uint32) {
 	gl.Disable(gl.Enum(capability))
+}
+
+func (c *xjsContext) DisableVertexAttribArray(attribute Attribute) {
+	gl.DisableVertexAttribArray(gl.Attrib(attribute))
 }
 
 func (c *xjsContext) DrawArrays(mode uint32, first, count int) {

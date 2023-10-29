@@ -80,6 +80,8 @@ func (p *painter) Init() {
 	p.rectangleProgram = p.createProgram("rectangle")
 	p.roundRectangleProgram = p.createProgram("round_rectangle")
 	p.multiProgram = p.createProgram("multi")
+	p.groupRoundRectProgram = p.createProgram("group_round_rectangle")
+	p.groupTextureProgram = p.createProgram("group_texture")
 }
 
 type coreContext struct{}
@@ -157,6 +159,9 @@ func (c *coreContext) DeleteTexture(texture Texture) {
 
 func (c *coreContext) Disable(capability uint32) {
 	gl.Disable(capability)
+}
+
+func (c *coreContext) DisableVertexAttribArray(attribute Attribute) {
 }
 
 func (c *coreContext) DrawArrays(mode uint32, first, count int) {
