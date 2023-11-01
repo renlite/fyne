@@ -1,4 +1,4 @@
-//go:build !multi_shader && !single_shader
+//go:build !single_shader && !multi_shader
 
 package gl
 
